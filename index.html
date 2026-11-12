@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Pip nycklarna</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #111; color: #eee;
+               font-family: -apple-system, system-ui, sans-serif; }
+  body { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 24px; }
+  button { width: 70vmin; height: 70vmin; border-radius: 50%; border: none;
+           background: #2e7d32; color: #fff; font-size: 11vmin; font-weight: 700;
+           -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+  button:active { transform: scale(0.96); }
+  button.busy { background: #555; }
+  #status { min-height: 1.5em; font-size: 5vmin; text-align: center; padding: 0 16px; }
+</style>
+</head>
+<body>
+<button id="pip">PIP</button>
+<div id="status"></div>
+ 
+<script>
+// Samma UUID:er som i nyckel_modul.ino
+const SERVICE = '8f1c0001-6c2b-4b8e-9a1e-2f6d5b7c9a01';
+const CHAR    = '8f1c0002-6c2b-4b8e-9a1e-2f6d5b7c9a01';
+const ANTAL_PIP = 3;
+ 
+const btn = document.getElementById('pip');
+const status = document.getElementById('status');
+let ch = null;   // sparad characteristic → nästa tryck går direkt utan väljare
+ 
+function show(t) { status.textContent = t; }
+ 
+async function connect(device) {
+  const server = await device.gatt.connect();
+  const svc = await server.getPrimaryService(SERVICE);
+  ch = await svc.getCharacteristic(CHAR);
+  device.addEventListener('gattserverdisconnected', () => { ch = null; });
+}
+ 
+async function pip() {
+  if (!navigator.bluetooth) { show('Öppna sidan i Bluefy'); return; }
+  btn.classList.add('busy');
+  try {
+    if (!ch) {
+      // Försök först med redan godkänd enhet (slipper väljaren om webbläsaren stöder det)
+      let device = null;
+      if (navigator.bluetooth.getDevices) {
+        const known = await navigator.bluetooth.getDevices();
+        device = known.find(d => d.name === 'Nycklar') || null;
+      }
+      if (!device) {
+        device = await navigator.bluetooth.requestDevice({ filters: [{ services: [SERVICE] }] });
+      }
+      show('Ansluter…');
+      await connect(device);
+    }
+    await ch.writeValue(new Uint8Array([ANTAL_PIP]));
+    show('Piper!');
+  } catch (e) {
+    ch = null;
+    show(e.name === 'NotFoundError' ? '' : 'Hittade inte nycklarna – försök igen närmare');
+  } finally {
+    btn.classList.remove('busy');
+  }
+}
+ 
+btn.addEventListener('click', pip);
+</script>
+</body>
+</html>
