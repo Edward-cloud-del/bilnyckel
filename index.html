@@ -24,13 +24,20 @@
 // Samma UUID:er som i nyckel_modul.ino
 const SERVICE = '8f1c0001-6c2b-4b8e-9a1e-2f6d5b7c9a01';
 const CHAR    = '8f1c0002-6c2b-4b8e-9a1e-2f6d5b7c9a01';
-const ANTAL_PIP = 3;
+const ANTAL_PIP = 2;   // antal "ding-dong"
  
 const btn = document.getElementById('pip');
 const status = document.getElementById('status');
 let ch = null;   // sparad characteristic → nästa tryck går direkt utan väljare
  
 function show(t) { status.textContent = t; }
+ 
+// [antal, minut-sedan-midnatt lo, hi] → modulen synkar klockan för nattläget
+function paket(n) {
+  const d = new Date();
+  const m = d.getHours() * 60 + d.getMinutes();
+  return new Uint8Array([n, m & 0xff, m >> 8]);
+}
  
 async function connect(device) {
   const server = await device.gatt.connect();
@@ -56,7 +63,7 @@ async function pip() {
       show('Ansluter…');
       await connect(device);
     }
-    await ch.writeValue(new Uint8Array([ANTAL_PIP]));
+    await ch.writeValue(paket(ANTAL_PIP));
     show('Piper!');
   } catch (e) {
     ch = null;
@@ -67,6 +74,22 @@ async function pip() {
 }
  
 btn.addEventListener('click', pip);
+ 
+// ?auto → försök pipa direkt vid öppning om enheten redan är godkänd (kräver getDevices-stöd)
+async function autoPip() {
+  if (!location.search.includes('auto') || !navigator.bluetooth || !navigator.bluetooth.getDevices) return;
+  try {
+    const known = await navigator.bluetooth.getDevices();
+    const device = known.find(d => d.name === 'Nycklar');
+    if (!device) return;
+    show('Ansluter…');
+    await connect(device);
+    await ch.writeValue(paket(ANTAL_PIP));
+    show('Piper!');
+  } catch (e) { ch = null; show(''); }
+}
+autoPip();
 </script>
 </body>
 </html>
+ 
