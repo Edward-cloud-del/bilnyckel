@@ -3,25 +3,60 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Pip nycklarna</title>
+<title>Sitt o träng!</title>
 <style>
-  html, body { margin: 0; height: 100%; background: #111; color: #eee;
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: #f4f5f7; color: #1c1f24;
                font-family: -apple-system, system-ui, sans-serif; }
-  body { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 24px; }
-  button { width: 70vmin; height: 70vmin; border-radius: 50%; border: none;
-           background: #2e7d32; color: #fff; font-size: 11vmin; font-weight: 700;
-           -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
-  button:active { transform: scale(0.96); }
-  button.busy { background: #555; }
-  #status { min-height: 1.5em; font-size: 5vmin; text-align: center; padding: 0 16px; }
+  body { min-height: 100dvh; display: flex; flex-direction: column; align-items: center;
+         justify-content: space-between; gap: 2vh;
+         padding: max(14px, env(safe-area-inset-top)) 16px max(14px, env(safe-area-inset-bottom)); }
+
+  .bil { width: 100%; max-width: 520px; object-fit: cover; border-radius: 18px;
+         box-shadow: 0 6px 20px rgba(0,0,0,.12); }
+  #bil1 { max-height: 24vh; }
+  #bil2 { max-height: 16vh; }
+
+  .mitten { display: flex; flex-direction: column; align-items: center; gap: 1.6vh; }
+
+  button { width: min(68vmin, 40vh); height: min(68vmin, 40vh); border-radius: 50%;
+           border: min(1.6vmin, 8px) solid #d4161c; background: #fff; color: #d4161c;
+           display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1vmin;
+           font-family: inherit; font-size: min(7.5vmin, 4.4vh); font-weight: 800; line-height: 1.05;
+           padding: 0 5vmin;
+           box-shadow: 0 10px 0 #9c0f14, 0 18px 30px rgba(212,22,28,.3);
+           -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+           transition: transform .08s, box-shadow .08s; }
+  button img { width: 46%; max-height: 46%; object-fit: contain; pointer-events: none; }
+  button:active { transform: translateY(8px); box-shadow: 0 2px 0 #9c0f14, 0 6px 12px rgba(212,22,28,.3); }
+  button.busy { border-color: #8a8f98; color: #8a8f98; box-shadow: 0 10px 0 #5d626a; }
+  button.busy img { opacity: .5; }
+
+  #status { min-height: 1.4em; font-size: min(5vmin, 3vh); font-weight: 600; text-align: center; }
+
+  #tips { border: none; background: #fff; color: #555b66; font: inherit; font-size: min(3.8vmin, 2.2vh);
+          padding: .6em 1.1em; border-radius: 999px; box-shadow: 0 2px 8px rgba(0,0,0,.08);
+          animation: puls 2.2s ease-in-out infinite; }
+  #tips::before { content: "↻ "; display: inline-block; animation: snurr 3s linear infinite; }
+  @keyframes puls  { 0%, 100% { transform: scale(1); opacity: .75; } 50% { transform: scale(1.05); opacity: 1; } }
+  @keyframes snurr { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { #tips, #tips::before { animation: none; } }
 </style>
 </head>
 <body>
-<button id="pip">PIP</button>
-<div id="status"></div>
+
+<img class="bil" id="bil1" src="bil1.png" alt="" onerror="this.remove()">
+
+<div class="mitten">
+  <button id="pip"><img src="logo.png" alt="" onerror="this.remove()"><span>Sitt o träng!</span></button>
+  <div id="status"></div>
+  <div id="tips" role="button">Om den inte connectar, ladda om sidan!</div>
+</div>
+
+<img class="bil" id="bil2" src="bil2.png" alt="" onerror="this.remove()">
 
 <script>
-// Samma UUID:er som i nyckel_modul.ino
+// Samma UUID:er som i nyckelmodulen
 const SERVICE = '8f1c0001-6c2b-4b8e-9a1e-2f6d5b7c9a01';
 const CHAR    = '8f1c0002-6c2b-4b8e-9a1e-2f6d5b7c9a01';
 const ANTAL_PIP = 2;   // antal "ding-dong"
@@ -32,6 +67,19 @@ let ch = null;   // sparad characteristic → nästa tryck går direkt utan väl
 let tvingaValjare = location.search.includes('para');  // ?para → visa alltid väljaren
 
 function show(t) { status.textContent = t; }
+
+// Tryck på tipset → ladda om sidan
+document.getElementById('tips').addEventListener('click', () => location.reload());
+
+// Släpp anslutningen efter en stund så att andra telefoner kan hitta nycklarna
+let slappTimer = null;
+function slappSenare() {
+  clearTimeout(slappTimer);
+  slappTimer = setTimeout(() => {
+    try { if (ch) ch.service.device.gatt.disconnect(); } catch (e) {}
+    ch = null;
+  }, 10000);
+}
 
 // [antal, minut-sedan-midnatt lo, hi] → modulen synkar klockan för nattläget
 function paket(n) {
@@ -65,7 +113,8 @@ async function pip() {
       await connect(device);
     }
     await ch.writeValue(paket(ANTAL_PIP));
-    show('Piper!');
+    show('🔔 Nycklarna piper!');
+    slappSenare();
   } catch (e) {
     ch = null;
     tvingaValjare = true;   // sparad enhet funkade inte → nästa tryck visar väljaren
@@ -87,8 +136,9 @@ async function autoPip() {
     show('Ansluter…');
     await connect(device);
     await ch.writeValue(paket(ANTAL_PIP));
-    show('Piper!');
-  } catch (e) { ch = null; tvingaValjare = true; show('Tryck PIP'); }
+    show('🔔 Nycklarna piper!');
+    slappSenare();
+  } catch (e) { ch = null; tvingaValjare = true; show(''); }
 }
 autoPip();
 </script>
